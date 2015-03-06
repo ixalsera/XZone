@@ -1,15 +1,17 @@
 #!/bin/bash
-#####################################################
-#
-#	XZone Bash Script 0.1 - Verbose - Scytheri0n
-#
-#	A simple bash script to create a HomePass network
-#	on OS X.
-#
-#####################################################
+#############################################################
+#															#
+#	XZone Bash Script 0.2 - Verbose - Scytheri0n			#
+#															#
+#	A simple bash script to create a HomePass network		#
+#	on OS X.												#
+#															#
+#############################################################
 
 #	We need to check if we are running as root to
 #	execute some of the commands.
+
+clear						#	Clears the terminal window
 
 if [ $UID != 0 ]; then
 
@@ -27,6 +29,31 @@ count=0						#	Loop count
 finalMAC=""					#	The final MAC address that will be spoofed
 sleepTime=120				#	How long the script must pause for
 
+printf "Please enter the time (in minutes) you wish the script\nto cycle through addresses:  "
+
+read inputTime				#	Get the cycle time from the user
+
+function testForInteger {
+	re='^[0-9]+$'
+	if ! [[ $inputTime =~ $re ]] ; then			#	Makes sure $inputTime is an integer
+ 	  echo "You did not enter a valid number. Please try again."
+ 	  printf "Please enter the time (in minutes) you wish the script\nto cycle through addresses:  "
+ 	  read inputTime
+ 	  testForInteger
+	fi
+}
+
+testForInteger				#	Make sure the user enters a valid number.
+
+if [ $inputTime -gt 2 ]; then
+	sleepTime=$((inputTime * 60))
+	echo "Script is cycling addresses every" $inputTime "minutes ("$sleepTime "seconds)."
+else
+	sleepTime=120
+	echo "Cycle value too low. Using default cycle of 2 minutes."
+fi
+
+
 function spoofMAC {
 	echo "Spoofing MAC!"
 	ifconfig en1 ether $finalMAC		#	Set the MAC address to the value of 'finalMAC'
@@ -37,7 +64,7 @@ function spoofMAC {
 	sleep 1
 	ifconfig en1 up						#	Enable Wi-Fi
 	echo "Wi-Fi reset!"
-	sleep 120							#	Sleep for the requested duration
+	sleep $sleepTime					#	Sleep for the requested duration
 }
 
 function setHex {
