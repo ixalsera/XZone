@@ -3,14 +3,18 @@
 #
 #		#############################################################
 #		#															#
-#		#					XZone 0.5 - Scytheri0n					#
+#		#				   XZone 0.5.1 - Scytheri0n					#
 #		#															#
-#		#	A simple command line utility to create a HomePass		#
-#		#					network on OS X.						#
+#		#	 A simple command line utility to create a HomePass		#
+#		#					   network on OS X.						#
 #		#															#
 #		#############################################################
 #
 #	Changelog:
+#
+#	0.5.1	-	Fixed a bug with setting the SSID for Nintendo World MACs. Added an
+#				option to change preferences on start up, rather than having to reset
+#				all preferences. Improved launch flag option handling.
 #
 #	0.5		-	Preferences! XZone will now save user choices into a .plist and recall
 #				them at next start. Fixed a little bug with the SSID array. Improved 
@@ -40,6 +44,7 @@ finalMAC=""								#	The final MAC address that will be spoofed
 sleepTime=120							#	How long the script must pause for
 includeNW=0								#	Nintendo World MACs included or not
 isFirstPass=1							#	Is the script running again?
+launchFlag=""							#	Allows flags to be set at launch
 
 #	The original MAC address of the system
 originalMAC=$(networksetup -getmacaddress Wi-Fi | awk '{print $3}')
@@ -263,7 +268,7 @@ echo "We need to make sure we are broadcasting using the 'attwifi' SSID."
 
 cp /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist /Library/Preferences/SystemConfiguration/xzone.preferences.plist.bak
 
-defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data $ssid[1]
+defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data 61747477696669
 
 echo "SSID set to 'attwifi'."
 
@@ -332,9 +337,8 @@ function scriptStart {
 
 		setSSID									#	Determine which SSID to use
 
+		printf "\nScript Starting!\n\n"
 	fi
-
-	printf "\nScript Starting!\n\n"
 	
 	setHex
 
@@ -471,36 +475,66 @@ fi
 
 function usage {
 
-printf "Usage:	xzone -[h][r][s][v]\nOptions:\n	-h	Help. Displays this help message.\n	-r	Reset. Resets saved preferences.\n	-s	Silent. Runs the program silently.\n	-v	Verbose. Logs output to stdout. This is the default\n		option if no options are passed.\n\n"
+printf "\nUsage:	xzone -[c][h][r][s][v]\nOptions:\n	-c	Change Options. Allows you to change individual options before the script runs.\n	-h	Help. Displays this help message.\n	-r	Reset. Resets saved preferences.\n	-s	Silent. Runs the program silently.\n	-v	Verbose. Logs output to stdout. This is the default\n		option if no options are passed.\n\n"
 exit $?
+
+}
+
+function changeOpts {
+
+echo "Which option would you like to change?"
+echo "1.	Include Nintendo World		2.	Change Cycle Frequency"
+echo "3.	Change Starting Octet		4.	Change SSID"
+read -n1 getOption
+echo ""
+case $getOption in
+	1)
+		includeNintendo
+		;;
+	2)
+		setCycle
+		;;
+	3)
+		setStartOctet
+		;;
+	4)
+		setSSID
+		;;
+	*)
+		echo "Invalid selection."
+		changeOpts
+		;;
+esac
+
+printf "\nAre you done changing options? Y/N	"
+read -n1 doneWithOpts
+echo ""
+if [ $doneWithOpts != "y" ]; then
+	changeOpts
+fi
 
 }
 
 #########################################################################################
 
-while getopts hrsv option
+while getopts hrsvc option
 do
 case $option in
 	v)
-		echo "Running verbose. All output will be displayed."
+		launchFlag="v"
 		;;
 	s)
-		if [ -e ~/Library/Preferences/com.scytheri0n.xzone.plist ]; then
-			exec 1>/dev/null 2>&1
-		else
-			echo "No preferences exist. Script cannot be run silently without preferences."
-		fi
+		launchFlag="s"
 		;;
 	h)
 		usage
 		exit 1
 		;;
 	r)
-		if [ -e ~/Library/Preferences/com.scytheri0n.xzone.plist ]; then
-			sudo rm ~/Library/Preferences/com.scytheri0n.xzone.plist
-		else
-			echo "No preferences exist so there's nothing to reset. Silly!"
-		fi
+		launchFlag="r"
+		;;
+	c)
+		launchFlag="c"
 		;;
 	*)
 		usage
@@ -521,6 +555,35 @@ fi
 clear									#	Clears the terminal window
 	
 trap scriptAbort SIGINT SIGTERM
+
+case $launchFlag in
+	v)
+		echo "Running verbose. All output will be displayed."
+		;;
+	s)
+		if [ -e ~/Library/Preferences/com.scytheri0n.xzone.plist ]; then
+			exec 1>/dev/null 2>&1
+		else
+			echo "No preferences exist. Script cannot be run silently without preferences."
+		fi
+		;;
+	r)
+		if [ -e ~/Library/Preferences/com.scytheri0n.xzone.plist ]; then
+			sudo rm ~/Library/Preferences/com.scytheri0n.xzone.plist
+		else
+			echo "No preferences exist so there's nothing to reset. Silly!"
+		fi
+		;;
+	c)
+		if [ -e ~/Library/Preferences/com.scytheri0n.xzone.plist ]; then
+			changeOpts
+		else
+			echo "No preferences exist so there's nothing to change! Silly!"
+		fi
+		;;
+	*)
+		;;
+esac
 
 checkPrefs								#	Check for and set preferences
 
