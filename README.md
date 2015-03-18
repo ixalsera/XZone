@@ -15,31 +15,54 @@ The "X" in "OS X" is actually pronounced "ten" and not "ex", and since we are ba
 3. Select 'Internet Sharing' in the sidebar
 4. Under 'Share your connection from:' select 'Ethernet'
 5. In the box labelled 'To computers using:' select Wi-Fi
-6. Click 'Wi-Fi Options...'
-7. If you know the channel of any other Wi-Fi devices around, set the channel of your Zone to the best available channel, otherwise leave it as it is.
-8. Make sure 'Security' is set to 'None'.
-9. Click 'Ok' and enable Internet Sharing by selecting the checkbox next to it on the left.
-10. Your network is now set up! Yay! You will only need to do this once, the script will take care of setting the SSID in future.
+6. Enable Internet Sharing by selecting the checkbox next to it on the left.
+7. You're now broadcasting a network! Yay! XZone will handle everything else from here. Just follow these instructions whenever you need to enable or disable Internet Sharing.
 
-###### Enabling HomePass:
-You have a choice of two files to download, `xzone.sh` and `xzone-v.sh`. Both of these files are exactly the same but for one exception: `xzone-v.sh` is a verbose version of the script, it will tell you exactly what it is doing at each step of the way. You can use this if a blank terminal window scares you a little. Don't worry, in a future version we will have these scripts running as a daemon so we won't need a terminal window open! Yesssssss!
+###### Downloading and Executing XZone:
+Previously, there were two scripts you could download but these have both been combined in to one utility now. By default, XZone runs as verbose (meaning it outputs what it is doing to the Terminal window), but you can also silence it if you don't want to see it running. Don't worry, in a future version we will have XZone running as a daemon so we won't need a terminal window open! Yesssssss!
 
-To enable your HomePass network, download the zip of the repository (which you can find to the right of this ReadMe), open Terminal, and simply drag the script you want to use on to the window and hit return. It will ask you for an administrator password (because some of the functions require elevated privileges) so make sure you have admin rights before running this.
+To enable your HomePass network, download and extract the zip of the repository (which you can find to the right of this ReadMe), open Terminal, and simply drag XZone on to the window and hit return. If Terminal complains about permissions, you might need to first run `chmod +x \path\to\XZone`, of course inserting the correct path to your XZone file. You'll then be asked for an administrator password (because some of the functions require elevated privileges) so make sure you have admin rights before running this.
 
-First, decide whether or not you want to use the Nintendo World MACs when cycling. If you choose to, XZone will automagically spoof them and the correct SSID every time it exhausts the 255 HomePass MACs before starting again.
+You can see what launch options are available by running XZone with the `-h` flag. (i.e. `./XZone -h`)
 
-Next choose how often you want XZone to cycle (refresh) the MAC address, the default being every two minutes. Why would you want to change this, you might ask? If you want to play a game that requires an internet connection for an extended duration (such as Pokémon, for example) you'll need to stop XZone from cycling every two minutes and disrupting your internet connectivity. When prompted, input the cycle frequency you want to use, in minutes. If you input a value less than 2, it will automatically default to two minutes to prevent any problems from occurring.
+###### Initial Setup
+The first time you run XZone, you'll be asked a few setup questions in order to configure it for your preference. First, decide whether or not you want to use the Nintendo World MACs when cycling. If you choose to, XZone will automagically spoof them and the correct SSID every time it exhausts the 255 HomePass MACs.
 
-Then, select the SSID you want to use. Initially, you are presented with only the two default choices that most people are using, but you can choose to see the entire list and select another if you have a specific reason to.
+Next, choose how often you want XZone to cycle (refresh) the MAC address, the default being every two minutes. Why would you want to change this, you might ask? If you want to play a game that requires an internet connection for an extended duration (such as Pokémon, for example) you'll need to stop XZone from cycling every n minutes and disrupting your internet connectivity. When prompted, input the cycle frequency you want to use, in minutes. If you input a value less than 2, it will automatically default to two minutes to prevent any problems from occurring. (In a future patch, "0" will be a viable option too, if you wish to disable cycling for whatever reason.)
 
-Finally, you can choose to set the final octet of the HomePass MAC that you want to start at, useful if you stopped the script at some point and don't want to waste time working through MACs that your 3DS has set on cooldown.
+Then, select the SSID you want to use. Initially, you are presented with only the two default choices that most people are using ('attwifi' and 'NZ@McD1'), but you can choose to see the entire list and select another if you have a specific reason to.
 
-And that's it. Your HomePass (let's call it XZone, though, yeah?) is set up and running! Woohoo! Just sit back and watch as all the StreetPass data comes flooding in.
+Finally, you can choose to set the final octet of the HomePass MAC that you want to start at. This is entirely optional, but useful if you've reset your preferences for some reason or another and need to start at a specific MAC to avoid the 3DS cooldown time.
+
+And that's it. Your HomePass (let's call it XZone, though, yeah?) is set up and running. Woohoo! Just sit back and watch as all the StreetPass data comes flooding in! On subsequent launches, XZone will use your preset preferences and pick up where it left off, so you won't need to go through the above steps again unless you choose to reset your preferences.
 
 ###### Stopping XZone:
-Stopping XZone is simple. You can either click the red traffic light to close the Terminal window (Terminal will double check that you want to quit all running processes, just say yes) or you can hit Ctrl+C to terminate the script. XZone will then revert all changes to your system that it has made and close.
+Stopping XZone is simple; You can simply hit Ctrl+C to terminate the script. XZone will then revert all changes to your system that it has made and close.
 
 <hr>
 
 #### How it works:
-More info will be available here shortly.
+To get a better idea of how XZone works, open it up in a text editor and glance through the (generally over-commented) code. Or, if you're lazy, here's a little summary.
+
+XZone works by automatically setting the MAC address of your WiFi card to one in a preset range that has been chosen for HomePass, and broadcasting a wireless network with an SSID (or name) that the 3DS recognises as an open, safe network to use.
+When your 3DS connects, it talks to Nintendo's StreetPass servers in order to download information about other 3DS users connected to the same SSID, exchanging any data between the devices necessary for Spot/StreetPass functionality in your games (like Miis in Mii Plaza).
+Normally, the 3DS caches a MAC address for about 8 hours, preventing you from spamming your friends with StreetPass data. To get around this, XZone cycles through MAC addresses every so often, fooling the 3DS in to thinking it is connecting to a different device and thus connecting and downloading data again.
+
+The SSID you choose is entirely up to you. There is a list of usable SSIDS available [here](http://yls8.mtheall.com/ninupdates/3ds_nzonehotspots.php?version=v15360) that shows you which SSIDS the 3DS will automatically connect to and their respective functionality. The most common is 'NZ@McD1', so you'll likely get the most hits on that. The second most common is 'attwifi', which differs from 'NZ@McD1' in that it no longer functions as a Nintendo Zone (see the post [here](https://gbatemp.net/threads/how-to-have-a-homemade-streetpass-relay.352645/page-269#post-5401283) for an explanation) but still functions as a StreetPass relay.
+
+<hr>
+
+#### Thanks
+There are actually far too many people to thank here for their inspiration in creating XZone. Most notably, the entire 3DS homebrew team who are probably the reason we know how this all works in the first place. [taintedzodiac](https://github.com/taintedzodiac), without whom I wouldn't have had [relaymyhome](https://github.com/taintedzodiac/relaymyhome) to pull apart and learn bash scripting from. Also, far too many users on StackExchange whose questions and answers realy helped me out when I was pulling my hair out trying to figure out how to do something. [FatMagic](http://reddit.com/u/FatMagic) for his spreadsheet [here](https://docs.google.com/spreadsheet/ccc?key=0AvvH5W4E2lIwdEFCUkxrM085ZGp0UkZlenp6SkJablE#gid=0). And of course, all the guys and girls at GBATemp, particularly [this thread](https://gbatemp.net/threads/how-to-have-a-homemade-streetpass-relay.352645/), who've helped out the community with NZone for Windows, Linux, and DD-WRT.
+
+#### Want to say thanks?
+XZone is built and maintained by me in my spare time as a bit of a hobby, and a way for me to carry on learning to code while having fun. Obviously, I'm not getting paid for it, and I don't expect to. But if you're feeling like saying thanks, you can give me a shoutout on [Twitter](http://twitter.com/stuhonour) and spread the word with #XZoneApp. Or, for the more generous among you, you could donate via BitCoin (1JcQvD9gr2xncU9cb9ZEPWRkJiFd8CUwEJ) or PayPal. :)
+<br><br>
+<form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
+<input type="hidden" name="cmd" value="_s-xclick">
+<input type="hidden" name="encrypted" value="-----BEGIN PKCS7-----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-----END PKCS7-----
+">
+<input type="image" src="https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif" border="0" name="submit" alt="PayPal - The safer, easier way to pay online!">
+<img alt="" border="0" src="https://www.paypalobjects.com/en_US/i/scr/pixel.gif" width="1" height="1">
+</form>
+
