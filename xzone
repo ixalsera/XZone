@@ -3,7 +3,7 @@
 #
 #		#############################################################
 #		#															#
-#		#				   XZone 0.5.3b - Scytheri0n				#
+#		#				   XZone 0.5.4b - Scytheri0n				#
 #		#															#
 #		#	 A simple command line utility to create a HomePass		#
 #		#					   network on OS X.						#
@@ -11,6 +11,11 @@
 #		#############################################################
 #
 #	Changelog:
+#
+#	0.5.4b	-	Made sure XZone support folder is only created if it doesn't exist. 
+#				Display settings after running a change prefs call. Removed SSIDs no
+#				longer accepted by latest firmware. Allowed "0" as an option for cycle
+#				frequency (i.e. Cycling disabled).
 #
 #	0.5.3b	-	Switched to backing up of IS prefs once only to avoid accidental
 #				overwrites. Switched to "lladdr" instead of "ether" for "ifconfig"
@@ -51,11 +56,12 @@
 #	-	Allow multiple launch options
 #	-	Time stamp log files
 #	-	Active Playtime setting
-#	-	Allow persistent zone (0 cycling) (although Active Playtime will probably be 
-#		more useful)
+#	-	Improve disabled cycling
 #	-	Create a GUI or AppleScript launcher (v1.0 milestone!)
 #	-	Notification Centre integration (probably with GUI)
 #	-	Comment code more clearly
+#	-	Run as a daemon instead of via Terminal
+#	-	Clean up SSIDs and their respective indices
 #
 ########################################################################################
 
@@ -139,10 +145,6 @@ ssid[25]="4e696e74656e646f53706f745061737332"				#	NintendoSpotPass2
 #	McDonald's Italy
 ssid[26]="4e696e74656e646f5f5a6f6e6531"						#	Nintendo_Zone1
 
-#	Guglielmo
-ssid[27]="4775676c69656c6d6f"								#	Guglielmo
-ssid[28]="4775676c69656c6d6f5f4575726f6e696373"				#	Guglielmo_Euronics
-
 #	KPN
 ssid[29]="4b504e"											#	KPN
 
@@ -150,13 +152,6 @@ ssid[29]="4b504e"											#	KPN
 ssid[30]="4d4554454f52"										#	METEOR
 ssid[31]="4d43444f4e414c4453"								#	MCDONALDS
 ssid[32]="434153494e4f5f62795f4d4554454f52"					#	CASINO_by_METEOR
-
-#	The Cloud
-ssid[33]="57694669205a6f6e65202d2054686520436c6f7564"		#	WiFi Zone - The Cloud
-ssid[34]="6d79636c6f7564"									#	mycloud
-ssid[35]="574c414e205a6f6e65202d2054686520436c6f7564"		#	WLAN Zone - The Cloud
-ssid[36]="6d79636c6f756420436974792057694669"				#	mycloud City WiFi
-ssid[37]="5f54686520436c6f7564"								#	_The Cloud
 
 #	FreeHotspot.com
 ssid[38]="667265652d686f7473706f742e636f6d"					#	free-hotspot.com
@@ -389,6 +384,9 @@ testForInteger							#	Make sure the user enters a valid number
 if [ $inputTime -gt 1 ]; then			#	Ensure cycle value is > 2
 	sleepTime=$((inputTime * 60))
 	echo "Script will cycle addresses every" $inputTime "minutes ("$sleepTime "seconds)."
+else if [ $inputTime == 0 ]; then
+	sleepTime=86400
+	echo "Cycling disabled."
 else
 	sleepTime=120
 	printf "Cycle value too low. Using default cycle of 2 minutes.\n\n"
@@ -426,7 +424,7 @@ case $getSSID in
 		printf "\n\nThe following is a list of all possible SSIDs that can\nbe used as StreetPass Relays:\n\n"
 		printf "1. attwifi		2. McDonalds Free WiFi	3. NZ@McD1	\n\n4. NZ@McD2		5. wifine		6. FREESPOT	\n\n7. noasp1		8. noasp2		9. Boingo Hotspot	\n\n10. boingo hotspot	11. ATL-Wi-Fi		12. Toronto Pearson Wi-Fi	\n\n13. AWG-WiFi		14. CLTNET		15. IND_PUBLIC_WiFi	\n\n16. LAX-WiFi		17. MIA-WiFi		18. RDU_WiFi	\n\n19. San.Diego.Airport.Free.WIFI			20. flysacramento	\n\n21. hotspot_Bell	22. BELLWIFI@MCDONALDS	23. Boulevard Saint-Laurent WIFI	\n\n"
 		read -p "Press any key to continue... " -n1 -s
-		printf "\n\n24. NintendoSpotPass1	25. NintendoSpotPass2	26. Nintendo_Zone1	\n\n27. Guglielmo		28. Guglielmo_Euronics	29. KPN	\n\n30. METEOR		31. MCDONALDS		32. CASINO_by_METEOR	\n\n33. WiFi Zone - The Cloud			34. mycloud	\n\n35. WLAN Zone - The Cloud			36. mycloud City WiFi	\n\n37. _The Cloud		38. free-hotspot.com	39. hotspot-gratuit.com	\n\n40. Autogrill_Free_WiFi	41. Autogrill Free WiFi	42. Quick WiFi	\n\n43. Quick Wi-Fi		44. Quick_WiFi		45. O2 Wifi	\n\n46. GOWEX FREE WiFi	\n\nPlease type the number of the SSID you wish to use:	"
+		printf "\n\n24. NintendoSpotPass1	25. NintendoSpotPass2	26. Nintendo_Zone1	\n\n29. KPN	30. METEOR		31. MCDONALDS		\n\n32. CASINO_by_METEOR	38. free-hotspot.com	39. hotspot-gratuit.com	\n\n40. Autogrill_Free_WiFi	41. Autogrill Free WiFi	42. Quick WiFi	\n\n43. Quick Wi-Fi		44. Quick_WiFi		45. O2 Wifi	\n\n46. GOWEX FREE WiFi	\n\nPlease type the number of the SSID you wish to use:	"
 		read -n2 getSSID
 		while [ $getSSID -gt 46 ]; do
 			printf "\n\nYou have made an invalid selection. Please try again."
@@ -550,6 +548,8 @@ case $getOption in
 		;;
 esac
 
+currentPrefs
+
 printf "\nAre you done changing options? Y/N	"
 read -n1 doneWithOpts
 echo ""
@@ -625,8 +625,13 @@ trap scriptAbort SIGINT SIGTERM
 
 if [ ! -e ~/Library/Application\ Support/XZone/com.apple.airport.preferences.plist ]; then
 
-	echo "Original IS settings not backed up. Backing up now ..."
-	mkdir ~/Library/Application\ Support/XZone
+	echo "Original IS settings not backed up."
+	if [ ! -e ~/Library/Application\ Support/XZone ]; then
+		echo "Creating XZone Support directory ..."
+		mkdir ~/Library/Application\ Support/XZone
+		echo "Done!"
+	fi
+	echo "Backing up now ..."
 	cp /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist ~/Library/Application\ Support/XZone/com.apple.airport.preferences.plist
 	echo "Done!"
 	
