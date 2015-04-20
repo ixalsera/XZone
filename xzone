@@ -3,7 +3,7 @@
 #
 #		#############################################################
 #		#															#
-#		#				   XZone 0.5.4b - Scytheri0n				#
+#		#				   XZone 0.6 - Scytheri0n					#
 #		#															#
 #		#	 A simple command line utility to create a HomePass		#
 #		#					   network on OS X.						#
@@ -12,22 +12,20 @@
 #
 #	Changelog:
 #
-#	0.5.4b	-	Made sure XZone support folder is only created if it doesn't exist. 
-#				Display settings after running a change prefs call. Removed SSIDs no
-#				longer accepted by latest firmware. Allowed "0" as an option for cycle
-#				frequency (i.e. Cycling disabled).
-#
-#	0.5.3b	-	Switched to backing up of IS prefs once only to avoid accidental
-#				overwrites. Switched to "lladdr" instead of "ether" for "ifconfig"
-#				to test MAC switching errors. Actual MAC now logged instead of tweaked
-#				variable.
-#
-#	0.5.2	-	Added logging to file as default instead of verbose. Fixed piping of 
-#				output for other options. Added a To-Do list. Whoop!
-#
-#	0.5.1	-	Fixed a bug with setting the SSID for Nintendo World MACs. Added an
+#	0.6		-	Fixed a bug with setting the SSID for Nintendo World MACs. Added an
 #				option to change preferences on start up, rather than having to reset
-#				all preferences. Improved launch flag option handling.
+#				all preferences. Improved launch flag option handling. Shifted preference
+#				checking forward to avoid changes being lost or ignored. Added logging to
+#				file as default instead of verbose. Fixed piping of output for other
+#				options. Added a To-Do list. Whoop! Switched to backing up of IS prefs
+#				once only to avoid accidental overwrites. Switched to "lladdr" instead of
+#				"ether" for "ifconfig". Actual MAC now logged instead of tweaked
+#				variable. Made sure XZone support folder is only created if it doesn't
+#				exist. Display settings after running a change prefs call. Removed SSIDs
+#				no longer accepted by latest firmware. Allowed "0" as an option for cycle
+#				frequency (i.e. Cycling disabled). Squashed a little tick on the
+#				Lion's back. Added an upgrade check. Added custom MAC addresses added
+#				by GBATemp users. Added actual Nintendo Zone MACs. Whew!
 #
 #	0.5		-	Preferences! XZone will now save user choices into a .plist and recall
 #				them at next start. Fixed a little bug with the SSID array. Improved 
@@ -54,7 +52,6 @@
 #	-	Make sure we can't parallel run!
 #	-	Allow safe exit from traffic light close
 #	-	Allow multiple launch options
-#	-	Time stamp log files
 #	-	Active Playtime setting
 #	-	Improve disabled cycling
 #	-	Create a GUI or AppleScript launcher (v1.0 milestone!)
@@ -62,6 +59,9 @@
 #	-	Comment code more clearly
 #	-	Run as a daemon instead of via Terminal
 #	-	Clean up SSIDs and their respective indices
+#	-	Timestamp MAC usage to prevent abuse
+#	-	Allow adding of own MACs to plist (and upload?!)
+#	-	Enable resuming from arrays
 #
 ########################################################################################
 
@@ -71,15 +71,21 @@
 
 MAC="4e:53:50:4f:4f:"					#	The initial 5 octets of the MAC
 endHex=00								#	The 6th octet for the MAC
-count=0									#	Loop count
+count=0									#	Count value for loops
 finalMAC=""								#	The final MAC address that will be spoofed
 sleepTime=120							#	How long the script must pause for
 includeNW=0								#	Nintendo World MACs included or not
 isFirstPass=1							#	Is the script running again?
 launchFlag=""							#	Allows flags to be set at launch
+useCustomMACs=0							#	User MACs included or not
+useNZMACs=0								#	Nintendo Zone MACs included or not
+userMAC=""								#	The custom MAC address to be used
+osxvers=$(sw_vers -productVersion)		#	The OS X version number
+version="0.6"							#	XZone version number
 
 #	The original MAC address of the system
 originalMAC=$(networksetup -getmacaddress Wi-Fi | awk '{print $3}')
+
 
 ########################################################################################
 
@@ -94,6 +100,8 @@ originalMAC=$(networksetup -getmacaddress Wi-Fi | awk '{print $3}')
 #
 #	SSIDs are divided in to AP Name clusters with the SSID on the right and 
 #	the corresponding hex value on the left.
+#
+#	NOTE: These will be moved to a separate .plist file in a later build
 #
 
 ########################################################################################
@@ -223,6 +231,12 @@ function spoofMAC {
 	sleep 1
 	ifconfig en1 up						#	Enable Wi-Fi
 	echo "Wi-Fi reset!"
+	if [ $(echo ${osxvers:3:1}) == 7 ]; then
+		echo "Toggling primary interface to re-enable IS"
+		ifconfig en0 down
+		sleep 1
+		ifconfig en0 up
+	fi
 	sleep $sleepTime					#	Sleep for the requested duration
 }
 
@@ -238,13 +252,31 @@ function setHex {
 
 #	If count value is 255, we have exhausted all valid octet values and need to restart.
 
-	echo "Starting again!"
 	endHex=0							#	Reset the 6th MAC octet
+	defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist StartOctet -data $endHex
 	isFirstPass=0						#	Make sure we don't do any init stuff again
+	
+	additionalMACs
+	
+	echo "Starting again!"
+	
+	scriptStart							#	Run the script again
+
+}
+
+function additionalMACs {
+
+	
 	if [ $includeNW == 1 ]; then
 		spoofNintendo
 	fi
-	scriptStart							#	Run the script again
+	if [ $useCustomMACs == 1 ]; then
+		spoofCustomMACs
+	fi
+	if [ $useNZMACs == 1 ]; then
+		spoofNintendoZones
+	fi
+
 
 }
 
@@ -282,9 +314,80 @@ function includeNintendo {
 
 }
 
+function includeCustomMACs {
+
+	printf "Would you like to include the GBATemp User MACs in the cycle? Y or N\n"
+	read -n1 userinput
+	
+	case $userinput in
+		y*)
+			printf "\n\nIncluding GBATemp User MACs.\n\n"
+			useCustomMACs=1
+			defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist UseCustomMACs -bool TRUE
+			;;
+		Y*)
+			printf "\n\nIncluding GBATemp User MACs.\n\n"
+			useCustomMACs=1
+			defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist UseCustomMACs -bool TRUE
+			;;
+		n*)
+			printf "\n\nOmitting GBATemp User MACs.\n\n"
+			useCustomMACs=0
+			defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist UseCustomMACs -bool FALSE
+			;;
+		N*)
+			printf "\n\nOmitting GBATemp User MACs.\n\n"
+			useCustomMACs=0
+			defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist UseCustomMACs -bool FALSE
+			;;
+		*)
+			printf "\n\nPlease type either Y or N.\n\n"
+			includeCustomMACs
+			;;
+	esac
+
+}
+
+function includeNZMACs {
+
+	printf "Would you like to include real Nintendo Zone MACs in the cycle? Y or N\n"
+	read -n1 userinput
+	
+	case $userinput in
+		y*)
+			printf "\n\nIncluding Nintendo Zone MACs.\n\n"
+			useNZMACs=1
+			defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist UseNZMACs -bool TRUE
+			;;
+		Y*)
+			printf "\n\nIncluding Nintendo Zone MACs.\n\n"
+			useNZMACs=1
+			defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist UseNZMACs -bool TRUE
+			;;
+		n*)
+			printf "\n\nOmitting Nintendo Zone MACs.\n\n"
+			useNZMACs=0
+			defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist UseNZMACs -bool FALSE
+			;;
+		N*)
+			printf "\n\nOmitting Nintendo Zone MACs.\n\n"
+			useNZMACs=0
+			defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist UseNZMACs -bool FALSE
+			;;
+		*)
+			printf "\n\nPlease type either Y or N.\n\n"
+			includeNZMACs
+			;;
+	esac
+
+}
+
 function spoofNintendo {
 
 echo "Spoofing Nintendo World MACs."
+
+/usr/libexec/PlistBuddy -c "Set :SpoofingNW bool TRUE" ~/Library/Preferences/com.scytheri0n.xzone.plist
+
 echo "We need to make sure we are broadcasting using the 'attwifi' SSID."
 
 cp /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist ~/Library/Application\ Support/XZone/com.apple.airport.preferences.edited.plist
@@ -292,6 +395,8 @@ cp /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist 
 defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data 61747477696669
 
 echo "SSID set to 'attwifi'."
+
+count=0									#	Set loop count to 0 so we know we will loop
 
 while [ $count -lt 6 ]; do
 
@@ -341,7 +446,189 @@ mv ~/Library/Application\ Support/XZone/com.apple.airport.preferences.edited.pli
 
 echo "SSID reverted."
 
-echo "Dropping back to standard MACs."
+/usr/libexec/PlistBuddy -c "Set :SpoofingNW bool FALSE" ~/Library/Preferences/com.scytheri0n.xzone.plist
+
+count=0
+
+}
+
+function spoofCustomMACs {
+
+	echo "Spoofing GBATemp user MACs so we can share the love!"
+	
+	/usr/libexec/PlistBuddy -c "Set :SpoofingCustom bool TRUE" ~/Library/Preferences/com.scytheri0n.xzone.plist
+
+	count=0
+
+	while [ count != -1 ]; do
+		
+		userMAC=$(/usr/libexec/PlistBuddy -c "Print :UserMACs:$count" ~/Library/Application\ Support/XZone/zonedata.plist 2>/dev/null)
+		
+		if [ ${#userMAC} == 17 ]; then
+			finalMAC=$userMAC
+			spoofMAC
+			count=$((count + 1))
+		else
+			break 2
+		fi
+		
+	done
+	
+	echo "We have spoofed all available GBATemp user MACs. The love has been shared."
+	
+	/usr/libexec/PlistBuddy -c "Set :SpoofingCustom bool FALSE" ~/Library/Preferences/com.scytheri0n.xzone.plist
+	
+	count=0
+
+}
+
+function spoofNintendoZones {
+
+echo "Spoofing real Nintendo Zone MACs."
+
+/usr/libexec/PlistBuddy -c "Set :SpoofingNZ bool TRUE" ~/Library/Preferences/com.scytheri0n.xzone.plist
+
+cp /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist ~/Library/Application\ Support/XZone/com.apple.airport.preferences.edited.plist
+
+echo "We need to make sure we are broadcasting using the correct SSID."
+
+ssidData=61747477696669
+
+ssidName=$(echo "$ssidData" | xxd -r -p)
+
+defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data $ssidData
+
+echo "SSID set to "$ssidName
+
+count=0									#	Set loop count to 0 so we know we will loop
+
+while [ count != -1 ]; do
+		
+	userMAC=$(/usr/libexec/PlistBuddy -c "Print :NintendoZones:attwifi:$count" ~/Library/Application\ Support/XZone/zonedata.plist)
+		
+	if [ ${#userMAC} == 17 ]; then
+		finalMAC=$userMAC
+		spoofMAC
+		count=$((count + 1))
+	else
+		break 2
+	fi
+		
+done
+
+count=0
+
+echo "Cycling to 'KPN' SSID."
+
+ssidData=4b504e
+
+ssidName=$(echo "$ssidData" | xxd -r -p)
+
+defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data $ssidData
+
+echo "SSID set to "$ssidName
+
+while [ count != -1 ]; do
+		
+	userMAC=$(/usr/libexec/PlistBuddy -c "Print :NintendoZones:KPN:$count" ~/Library/Application\ Support/XZone/zonedata.plist)
+		
+	if [ ${#userMAC} == 17 ]; then
+		finalMAC=$userMAC
+		spoofMAC
+		count=$((count + 1))
+	else
+		break 2
+	fi
+		
+done
+
+count=0
+
+echo "Cycling to 'BELLWIFI@MCDONALDS' SSID."
+
+ssidData=42454c4c57494649404d43444f4e414c4453
+
+ssidName=$(echo "$ssidData" | xxd -r -p)
+
+defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data $ssidData
+
+echo "SSID set to "$ssidName
+
+while [ count != -1 ]; do
+		
+	userMAC=$(/usr/libexec/PlistBuddy -c "Print :NintendoZones:BELLWIFI@MCDONALDS:$count" ~/Library/Application\ Support/XZone/zonedata.plist)
+		
+	if [ ${#userMAC} == 17 ]; then
+		finalMAC=$userMAC
+		spoofMAC
+		count=$((count + 1))
+	else
+		break 2
+	fi
+		
+done
+
+count=0
+
+echo "Cycling to 'NZ@McD1' SSID."
+
+ssidData=4e5a404d634431
+
+ssidName=$(echo "$ssidData" | xxd -r -p)
+
+defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data $ssidData
+
+echo "SSID set to "$ssidName
+
+while [ count != -1 ]; do
+		
+	userMAC=$(/usr/libexec/PlistBuddy -c "Print :NintendoZones:NZ@McD1:$count" ~/Library/Application\ Support/XZone/zonedata.plist)
+		
+	if [ ${#userMAC} == 17 ]; then
+		finalMAC=$userMAC
+		spoofMAC
+		count=$((count + 1))
+	else
+		break 2
+	fi
+		
+done
+
+count=0
+
+echo "Cycling to 'hotspot-gratuit.com' SSID."
+
+ssidData=686f7473706f742d677261747569742e636f6d
+
+ssidName=$(echo "$ssidData" | xxd -r -p)
+
+defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data $ssidData
+
+echo "SSID set to "$ssidName
+
+while [ count != -1 ]; do
+		
+	userMAC=$(/usr/libexec/PlistBuddy -c "Print :NintendoZones:hotspot-gratuit.com:$count" ~/Library/Application\ Support/XZone/zonedata.plist)
+		
+	if [ ${#userMAC} == 17 ]; then
+		finalMAC=$userMAC
+		spoofMAC
+		count=$((count + 1))
+	else
+		break 2
+	fi
+		
+done
+
+echo "We've cycled through all available (known) Nintendo Zones."	
+echo "Reverting SSID."
+
+rm /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist
+mv ~/Library/Application\ Support/XZone/com.apple.airport.preferences.edited.plist /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist
+
+echo "SSID reverted."
+
+/usr/libexec/PlistBuddy -c "Set :SpoofingNZ bool FALSE" ~/Library/Preferences/com.scytheri0n.xzone.plist
 
 count=0
 
@@ -357,6 +644,11 @@ function scriptStart {
 		setStartOctet							#	Determine starting octet for MAC
 
 		setSSID									#	Determine which SSID to use
+		
+		includeCustomMACs						#	Determine if we must include custom
+												#	MACs
+												
+		includeNZMACs							#	Determine if we must include NZ MACs
 		
 		currentPrefs
 
@@ -390,6 +682,7 @@ else if [ $inputTime == 0 ]; then
 else
 	sleepTime=120
 	printf "Cycle value too low. Using default cycle of 2 minutes.\n\n"
+fi
 fi
 
 defaults write ~/Library/Preferences/com.scytheri0n.xzone.plist CycleFrequency -int $sleepTime
@@ -510,6 +803,10 @@ if [ -e ~/Library/Preferences/com.scytheri0n.xzone.plist ]; then
 	ssid2=$(echo -e "$ssid2" | tr -d '[[:space:]]')
 	defaults write /Library/Preferences/SystemConfiguration/com.apple.airport.preferences InternetSharing -dict-add SSID -data $ssid2
 	
+	useCustomMACs=$(defaults read ~/Library/Preferences/com.scytheri0n.xzone.plist UseCustomMACs)
+	
+	useNZMACs=$(defaults read ~/Library/Preferences/com.scytheri0n.xzone.plist UseNZMACs)
+	
 	currentPrefs
 fi
 
@@ -527,6 +824,7 @@ function changeOpts {
 echo "Which option would you like to change?"
 echo "1.	Include Nintendo World		2.	Change Cycle Frequency"
 echo "3.	Change Starting Octet		4.	Change SSID"
+echo "5.	Include GBATemp User MACs	6.	Include real Nintendo Zones"
 read -n1 getOption
 echo ""
 case $getOption in
@@ -541,6 +839,12 @@ case $getOption in
 		;;
 	4)
 		setSSID
+		;;
+	5)
+		includeCustomMACs
+		;;
+	6)
+		includeNZMACs
 		;;
 	*)
 		echo "Invalid selection."
@@ -573,10 +877,44 @@ if [ $includeNW -gt 0 ]; then
 else
 	printf "False"
 fi
+printf "\nInclude Custom MACs: "
+if [ $useCustomMACs -gt 0 ]; then
+	printf "True"
+else
+	printf "False"
+fi
+printf "\nInclude real Nintendo Zones: "
+if [ $useNZMACs -gt 0 ]; then
+	printf "True"
+else
+	printf "False"
+fi
 printf "\nCycle Frequency: "$((sleepTime / 60))" minutes."
 printf "\nStarting Octet: "$(printf "%02x" $endHex)
 printf "\nSSID: "$ssidName
 printf "\n\n"
+
+}
+
+function checkVersion {
+
+	echo "Please wait while we perform necessary upgrade measures ..."
+
+	regVersion=$(/usr/libexec/PlistBuddy -c "Print :Version" ~/Library/Preferences/com.scytheri0n.xzone.plist 2>&1)
+	
+	if [ "$version" != "$regVersion" ]; then
+		
+		/usr/libexec/PlistBuddy -c "Add :Version string $version" ~/Library/Preferences/com.scytheri0n.xzone.plist
+		/usr/libexec/PlistBuddy -c "Add :SpoofingNW bool FALSE" ~/Library/Preferences/com.scytheri0n.xzone.plist
+		/usr/libexec/PlistBuddy -c "Add :SpoofingCustom bool FALSE" ~/Library/Preferences/com.scytheri0n.xzone.plist
+		/usr/libexec/PlistBuddy -c "Add :SpoofingNZ bool FALSE" ~/Library/Preferences/com.scytheri0n.xzone.plist
+		
+		includeCustomMACs
+		includeNZMACs
+		
+	fi
+	
+	echo "Done!"
 
 }
 
@@ -619,6 +957,8 @@ fi
 
 clear									#	Clears the terminal window
 
+date "+%nXZone Starting: %d/%m/%Y - %H:%M:%S%n" >>~/Library/Logs/XZone.log
+
 exec 3>&1 4>&2
 	
 trap scriptAbort SIGINT SIGTERM
@@ -636,6 +976,23 @@ if [ ! -e ~/Library/Application\ Support/XZone/com.apple.airport.preferences.pli
 	echo "Done!"
 	
 fi
+
+if [ ! -e ~/Library/Application\ Support/XZone/zonedata.plist ]; then
+
+	echo "We need to grab the Nintendo Zone data from the web, hold tight!"
+	if [ ! -e ~/Library/Application\ Support/XZone ]; then
+		echo "Creating XZone Support directory ..."
+		mkdir ~/Library/Application\ Support/XZone
+		echo "Done!"
+	fi
+	curl -s -o ~/Library/Application\ Support/XZone/zonedata.plist -H 'Authorization: token aeef0e10db9dbd2ee6a50f7623f3d056b572f7c8' -H 'Accept: application/vnd.github.v3.raw' -L https://api.github.com/repos/h0bd0b1in/XZone/master/zonedata.plist
+	echo "Got it!"
+	
+fi
+
+checkVersion							#	Check which version of XZone we are running
+
+checkPrefs								#	Check for and set preferences
 
 case $launchFlag in
 	v)
@@ -669,8 +1026,6 @@ case $launchFlag in
 	*)
 		;;
 esac
-
-checkPrefs								#	Check for and set preferences
 
 scriptStart								#	Start running the script proper
 
