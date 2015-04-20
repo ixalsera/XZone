@@ -985,7 +985,7 @@ if [ ! -e ~/Library/Application\ Support/XZone/zonedata.plist ]; then
 		mkdir ~/Library/Application\ Support/XZone
 		echo "Done!"
 	fi
-	curl -s -o ~/Library/Application\ Support/XZone/zonedata.plist -H 'Authorization: token aeef0e10db9dbd2ee6a50f7623f3d056b572f7c8' -H 'Accept: application/vnd.github.v3.raw' -L https://api.github.com/repos/h0bd0b1in/XZone/master/zonedata.plist
+	curl -o ~/Library/Application\ Support/XZone/zonedata.plist http://www.nyttfix.co.za/dropbox/zonedata.plist
 	echo "Got it!"
 	
 fi
