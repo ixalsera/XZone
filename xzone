@@ -3,7 +3,7 @@
 #
 #		#############################################################
 #		#															#
-#		#				   XZone 0.8 - Scytheri0n					#
+#		#				   XZone 0.9 - Scytheri0n					#
 #		#															#
 #		#	 A simple command line utility to create a HomePass		#
 #		#					   network on OS X.						#
@@ -12,62 +12,21 @@
 #
 #	Changelog:
 #
-# 0.8 	- Fixed problems on ifconfig interfaces now the script should use the correct ones.
-#
-#   0.7     -   Fixed bug with resuming where it would use the last used MAC address
-#               instead of using the next in sequence. Cleaned up a little redundancy.
-#				Added option of resuming from arrays (such as Nintendo Zones).
-#
-#	0.6		-	Fixed a bug with setting the SSID for Nintendo World MACs. Added an
-#				option to change preferences on start up, rather than having to reset
-#				all preferences. Improved launch flag option handling. Shifted preference
-#				checking forward to avoid changes being lost or ignored. Added logging to
-#				file as default instead of verbose. Fixed piping of output for other
-#				options. Added a To-Do list. Whoop! Switched to backing up of IS prefs
-#				once only to avoid accidental overwrites. Switched to "lladdr" instead of
-#				"ether" for "ifconfig". Actual MAC now logged instead of tweaked
-#				variable. Made sure XZone support folder is only created if it doesn't
-#				exist. Display settings after running a change prefs call. Removed SSIDs
-#				no longer accepted by latest firmware. Allowed "0" as an option for cycle
-#				frequency (i.e. Cycling disabled). Squashed a little tick on the
-#				Lion's back. Added an upgrade check. Added custom MAC addresses added
-#				by GBATemp users. Added actual Nintendo Zone MACs. Whew!
-#
-#	0.5		-	Preferences! XZone will now save user choices into a .plist and recall
-#				them at next start. Fixed a little bug with the SSID array. Improved
-#				getting input from user on first run.
-#
-#	0.4		-	Improved Nintendo World function to ensure that "attwifi" SSID is used.
-#				Added SSIDs to allow for selecting SSID to spoof at start. Backs up
-#				current IS config and MAC to allow user to revert on exit.
-#
-#	0.3		-	Corrected script to not mistakenly warn that 2 minutes is too low
-#				a cycle rate as well as corrected skipping of "ff" MAC. Included Nintendo
-#				World MACs. Allowed starting from custom MAC increment. Cleaned up script.
-#
-#	0.2		-	Allow user to enter a custom cycle rate
-#
-#	0.1		-	Initial release.
-#
-#										To-Do
-#
-#	-	Work out how to bloody enable and disable IS via Terminal in Yosemite
-#	-	Enable selection of interfaces to bridge
-#	-	Allow bridging from iPhone on Yosemite
-#	-	Streamline code
-#	-	Make sure we can't parallel run!
-#	-	Allow safe exit from traffic light close
-#	-	Allow multiple launch options
-#	-	Active Playtime setting
-#	-	Improve disabled cycling
-#	-	Create a GUI or AppleScript launcher (v1.0 milestone!)
-#	-	Notification Centre integration (probably with GUI)
-#	-	Comment code more clearly
-#	-	Run as a daemon instead of via Terminal
-#	-	Clean up SSIDs and their respective indices
-#	-	Timestamp MAC usage to prevent abuse
-#	-	Allow adding of own MACs to plist (and upload?!)
-#	-	Check for changes to IS config outside of XZone runtime
+#	0.9		-	*	XZone now uses the 'networksetup' utility to create and initialize an
+#					auxiliary network interface that Internet Sharing shares from.
+#				*	'networksetup' also does all the magic for us in terms of disabling
+#					and enabling Internet Sharing now so that we don't interrupt the Ethernet
+#					connection.
+#				*	Also uses the nifty AirPort utility included in the 802.11 Framework
+#					from Apple; makes sure we do not join a network in order for the MAC
+#					to be spoofed properly.
+#				*	Currently, although XZone service is set up automatically by the
+#					script, we still have to set it as the default sharing interface in
+#					 the IS preferences.
+#				*	The XZone service is enabled at start and disabled on exit to enable
+#					and disable IS appropriately.
+#				*	Updated the SSIDs to v18432
+#				*	Separated out the previous changes and to do list to separate documents
 #
 ########################################################################################
 
@@ -86,7 +45,7 @@ useCustomMACs=0				                                			#	User MACs included or no
 useNZMACs=0					                                			#	Nintendo Zone MACs included or not
 userMAC=""					                                			#	The custom MAC address to be used
 osxvers=$(sw_vers -productVersion)	                                	#	The OS X version number
-version="0.7"						                                	#	XZone version number
+version="0.9"						                                	#	XZone version number
 wifiservice=$(/usr/sbin/networksetup -listallnetworkservices | grep -Ei '(wi-fi|airport)')
 wifi=$(networksetup -listallhardwareports | awk "/${wifiservice}/,/Ethernet/"' getline { print $2 }')
 ethernet=$(networksetup -listallhardwareports | awk "/Ethernet/,/Ethernet/"' getline { print $2 }')
@@ -192,21 +151,22 @@ ssid[46]="474f57455820465245452057694669"					            #	GOWEX FREE WiFi
 
 #	This function performs the actual spoofing of the MAC address
 function spoofMAC {
+	echo "Disabling sharing interface..."
+	networksetup -setnetworkserviceenabled XZone off
+	echo "Interface disabled. Sharing halted."
+	sleep 5
+	echo "Disassociating from any Wi-Fi networks..."
+	/usr/local/xzone/airport -z
+	echo "Done!"
+	sleep 5
 	echo "Spoofing MAC!"
 	ifconfig $wifi lladdr $finalMAC		#	Set the MAC address to the value of 'finalMAC'
 	echo "MAC spoofed to "$(ifconfig ${wifi} lladdr | grep ether | awk '{print $2}')
-	echo "Resetting Wi-Fi ..."
-	sleep 1								#	Sleeping for slower systems
-	ifconfig $wifi down					#	Wi-Fi disabled
 	sleep 1
-	ifconfig $wifi up						#	Enable Wi-Fi
-	echo "Wi-Fi reset!"
-	if [ $(echo ${osxvers:3:1}) == 7 ]; then	#	If we are running OS X 10.7 Lion, we need to run this
-		echo "Toggling primary interface to re-enable IS"
-		ifconfig $ethernet down
-		sleep 1
-		ifconfig $ethernet up
-	fi
+	echo "Re-enabling sharing interface..."
+	networksetup -setnetworkserviceenabled XZone on
+	echo "Enabled!"
+	sleep 5								#	Sleep for 5 seconds to allow IS to reconfigure itself and get the proper cycle time
 	sleep $sleepTime					#	Sleep for the requested duration
 }
 
@@ -722,6 +682,11 @@ function spoofHG {
 
 function scriptStart {
 
+	sharingEnabled=$(networksetup -getnetworkserviceenabled XZone)
+	
+	if [ "sharingEnabled" == "Disabled" ]; then
+		networksetup -setnetworkserviceenabled XZone on
+	fi
 	setHex
 
 }
@@ -877,6 +842,9 @@ function setExtendedSSID {
 
 function scriptEnd {
 
+	printf "\n\nStopping Internet Sharing ...\n"
+	networksetup -setnetworkserviceenabled XZone off
+	
 	printf "\n\nReverting Internet Sharing configuration ...\n"
 
 	sudo rm /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist
@@ -885,11 +853,7 @@ function scriptEnd {
 	echo "Internet Sharing configuration reverted."
 	echo "Reverting MAC address ..."
 
-	sudo ifconfig $wifi lladdr ${originalMAC}
-	sleep 1
-	sudo ifconfig $wifi down
-	sleep 1
-	sudo ifconfig $wifi up
+	ifconfig $wifi lladdr ${originalMAC}
 
 	echo "MAC address reverted."
 	printf "\n\nThanks for using XZone!\n\n"
@@ -1137,6 +1101,11 @@ function checkVersion {
 
 		echo "Please wait while we perform necessary upgrade measures ..."
 
+		if [ $pointVers -lt 8 ]; then											#   If upgrading from 0.7 or before
+
+			createXZoneService
+
+		fi
 		if [ $pointVers -lt 7 ]; then											#   If upgrading from 0.6 or before
 
 			/usr/libexec/PlistBuddy -c "Add :Index integer 0" ~/Library/Preferences/com.scytheri0n.xzone.plist
@@ -1184,6 +1153,7 @@ function checkFirstRun {
 		printf "\nNow grabbing a default preference file ... "
 		curl -s -o ~/Library/Preferences/com.scytheri0n.xzone.plist http://www.nyttfix.co.za/dropbox/default.plist
 		printf "Done!\n"
+		createXZoneService
 
 		prefsSetup
 
@@ -1233,6 +1203,78 @@ function verifyPrefFile {
 
 
 
+function verifyAirportUtil {
+
+	if [ ! -e /usr/local/xzone/airport ]; then
+		printf "\nMaking sure the AirPort utility is accessable ... "
+		mkdir /usr/local/xzone
+		ln -s /System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport /usr/local/xzone/airport
+		printf "Done!"
+	fi
+
+}
+
+function createXZoneService {
+
+	serviceExists=$(networksetup -getinfo XZone | grep "Error" | awk '{print $2}')
+	
+	if [ "$serviceExists" == "Error:" ]; then
+	
+		printf "\nCreating a network service to share from ... "
+		networksetup -createnetworkservice XZone $ethernet
+
+		# Choose from the typical subnets
+		printf "\nWhich of the following subnets best matches your current network?"
+		printf "\n(Note: We will do our best to assign an IP within range!)"
+		printf "\n1.	192.168.1.xxx		2.	10.0.0.xxx"
+		printf "\n3.	10.0.1.xxx			4.	Other"
+		printf "\n"
+		optionSet=0
+		while [ $optionSet != 1 ]; do
+
+			read -n1 getOption
+			echo ""
+			if [ -z $getOption ]; then
+			echo "Ahem. You didn't select anything."
+			else
+			case $getOption in
+				1)
+					networksetup -setmanualwithdhcprouter XZone 192.168.1.188
+					optionSet=1
+					;;
+				2)
+					networksetup -setmanualwithdhcprouter XZone 10.0.0.188
+					optionSet=1
+					;;
+				3)
+					networksetup -setmanualwithdhcprouter XZone 10.0.1.188
+					optionSet=1
+					;;
+				4)
+					echo "Please launch System Preferences and set the new XZone interface to"
+					echo "'DHCP With Manual Address' and insert an available IP in your subnet."
+					echo "Hit Enter/Return when done."
+					read -n1 isComplete
+					optionSet=1
+					;;
+				*)
+					echo "Invalid selection."
+					;;
+			esac
+			fi
+		done
+		printf "Setting the XZone service as the IS source ... "
+		/usr/libexec/PlistBuddy -c "Set :NAT:PrimaryInterface:PrimaryUserReadable XZone" /Library/Preferences/SystemConfiguration/com.apple.airport.preferences.plist
+		printf "\nNote that this actually doesn't do anything right now. :( "
+
+		printf "Done!\n"
+		
+	fi
+	
+}
+
+
+
 
 #########################################################################################
 
@@ -1278,6 +1320,8 @@ date "+%nXZone Starting: %d/%m/%Y - %H:%M:%S%n" >>~/Library/Logs/XZone.log
 exec 3>&1 4>&2
 
 trap scriptAbort SIGINT SIGTERM			#	Catch user input while running (Ctrl-C)
+
+verifyAirportUtil						#	Make sure the AirPort utility is properly linked
 
 checkFirstRun                           #   Check to see if we have run before
 
